@@ -1,142 +1,146 @@
 # Secure E-Voting System
 
-**Date**: 2024-11-07  
-
-## Overview
-
-This project implements a secure and distributed electronic voting system using fob devices that communicate via Near Field Communication (NFC) simulated through Infrared (IR). The system dynamically handles device connections, disconnections, and failovers, ensuring secure and reliable voting. A coordinator device is elected among the fobs to manage the voting process, authenticate voters, and transmit data securely to a central database hosted on a Raspberry Pi. A web interface provides real-time updates on voting results. This project is currently a proof on concept on the ESP32, using the ESP-IDF framework.
+**Date**: November 7, 2024  
 
 ---
 
-## Features
+## Overview
 
-### Voter Authentication and Vote Casting
-- Utilizes NFC (via IR) to authenticate voters and transmit their unique IDs and votes to the system.  
+The **Secure E-Voting System** is a distributed electronic voting platform designed to ensure secure, reliable, and dynamic voting processes. Utilizing Near Field Communication (NFC) simulated via Infrared (IR), the system enables voter authentication, vote transmission, and real-time result reporting. A dynamically elected coordinator manages vote collection and securely logs data to a central database hosted on a Raspberry Pi. The project demonstrates resilience through automatic leader election and failover mechanisms, ensuring uninterrupted operation in case of coordinator failure.
 
-### Dynamic Coordinator Election and Failover
-- A distributed system dynamically elects a coordinator using leader election algorithms.  
-- Automatically elects a new coordinator upon failure of the current coordinator without interrupting the voting process.  
+---
 
-### Secure Vote Transmission
-- Votes and voter IDs are transmitted from fobs to the coordinator, which securely relays them to the database server.  
-- The coordinator sends confirmation back to the voting device to ensure successful vote transmission.  
+## Key Features
 
-### Centralized Data Logging and Web Interface
-- A Raspberry Pi server logs each vote in a TingoDB database.  
-- A web interface provides real-time polling results and allows administrators to reset the database with a button click.  
+### 1. Voter Authentication and Secure Vote Transmission
+- NFC (via IR) authenticates voters and transmits unique voter IDs and their votes securely to the system.
+- The coordinator relays votes to a database server and confirms successful submissions to the originating fob.
 
-### Device Status Indication
-- LEDs indicate device states:  
-  - **Red**: Non-leader  
-  - **Blue**: Leader  
-  - **Green**: Timeout  
+### 2. Dynamic Coordinator Election and Failover
+- A distributed system elects a coordinator using a leader election algorithm.
+- Automatic failover ensures a new coordinator takes over seamlessly in case of failure.
+
+### 3. Centralized Data Logging and Web Interface
+- Votes are logged in a TingoDB database on a Raspberry Pi server.
+- A real-time web interface provides:
+  - Poll results with timestamps and voter IDs.
+  - Live vote tallies for Red, Blue, and Green.
+  - Admin functionality to reset the database.
+
+### 4. Device Status Indication
+- LED Indicators:
+  - **Red**: Non-leader state.
+  - **Blue**: Leader state.
+  - **Green**: Timeout or error state.
+
+### 5. Distributed Resilience
+- Fobs operate on a distributed network, ensuring reliability and minimal downtime during coordinator transitions.
 
 ---
 
 ## System Design
 
 ### Core Components
-1. **Hardware Integration**
-   - ESP32 devices simulate NFC communication via IR.  
-   - Buttons allow voters to initiate the voting process.  
+1. **Fob Devices**
+   - ESP32-based devices simulate NFC with IR for vote transmission.
+   - Buttons allow voters to initiate the voting process.
+   - LEDs indicate device state and voting confirmation.
 
 2. **Network Communication**
-   - Devices connect via Wi-Fi, forming a distributed network.  
-   - UDP messages handle communication between devices and the server.  
+   - Fobs communicate via Wi-Fi using UDP for vote transmission and leader election.
 
 3. **Coordinator Election**
-   - Leader election algorithms ensure seamless selection of a coordinator.  
-   - Failover mechanisms ensure continuous operation during coordinator failure.  
+   - Implements the Bully Algorithm for dynamic leader election.
+   - Manages keep-alive signals to detect and recover from coordinator failures.
 
 4. **Database and Web Server**
-   - The Raspberry Pi server runs Node.js and TingoDB, logging votes and providing a web interface for real-time results.  
-
-5. **Concurrency and Synchronization**
-   - FreeRTOS tasks manage IR communication, button presses, network communication, and leader election.  
-   - Mutexes protect shared data across tasks.  
+   - Raspberry Pi runs Node.js and TingoDB for data storage.
+   - Hosts a web interface for real-time polling results and admin actions.
 
 ---
 
 ### Task Breakdown
 
-1. **Initialization (`app_main`)**  
-   - Sets up mutexes, semaphores, UART, MCPWM for IR communication, GPIOs for buttons and LEDs, Wi-Fi connectivity, and timers for leader election and keep-alive signals.  
+#### 1. Initialization
+- Sets up Wi-Fi, IR communication, buttons, LEDs, and FreeRTOS tasks for concurrency.
 
-2. **FreeRTOS Tasks**  
-   - **Button Task** (`button_task`)  
-     - Detects button presses and determines the voted ID. Initiates vote transmission when the timer expires.  
+#### 2. FreeRTOS Tasks
+- **IR Transmit/Receive Tasks**:
+  - Handle NFC (IR) communication for vote and leader election signals.
+- **Vote Task**:
+  - Processes and transmits voter ID and vote to the coordinator.
+- **Leader Election Task**:
+  - Implements leader election using messages like `MSG_ELECTION` and `MSG_VICTORY`.
+- **Coordinator Task**:
+  - Receives and logs votes, updates the web server, and sends confirmations.
 
-   - **IR Receive Task** (`ir_rx_task`)  
-     - Listens for incoming IR messages. Handles coordinator signals and starts leader election if needed.  
-
-   - **Leader Election Task** (`bully_algorithm_task`)  
-     - Participates in the Bully Algorithm for leader election and handles related messages (`MSG_ELECTION`, `MSG_ALIVE`, `MSG_VICTORY`, `MSG_KEEP_ALIVE`).  
-
-   - **UDP Receive Task** (`recv_task`)  
-     - Listens for UDP messages and processes votes, leader updates, and keep-alive signals.  
-
-   - **ID Task** (`id_task`)  
-     - Blinks the onboard LED to display the device's ID.  
-
-   - **IR Transmitting Task** (`continuous_ir_transmit_task`)  
-     - If the device is the coordinator, continuously sends coordinator signals via IR.  
-
-3. **Vote Transmission**
-   - **Non-Coordinator Device**: Sends `MSG_VOTE` to the coordinator via UDP.  
-   - **Coordinator Device**:  
-     - Processes `MSG_VOTE`, updates vote counts, and sends an acknowledgment to the voting device.  
-     - Forwards vote data to the server via UDP.  
-
-4. **Server (`store_votes.js`)**
-   - Listens for incoming votes via UDP.  
-   - Logs votes to the database at `mydb/votes`.  
-   - Hosts a web interface at `http://192.168.1.103:8080` for viewing real-time polling results.  
+#### 3. Web Server
+- Logs votes with timestamps and IDs.
+- Displays real-time vote tallies for each option (Red, Blue, Green).
+- Allows administrators to reset the database via a web interface.
 
 ---
 
-## Visuals
+## Results and Achievements
 
-### Circuit Diagram
-![Circuit Diagram](circuit-diagram.jpeg)
+### Achievements
+- Successfully implemented secure voting with real-time authentication and result reporting.
+- Demonstrated resilience with dynamic coordinator election and seamless failover.
+- Provided a functional web interface for real-time vote visualization and database management.
 
----
-
-## Potential Improvements
-
-1. **Hardware Interrupts**  
-   - Replace polling-based IR reception with hardware interrupts for better real-time performance.  
-
-2. **Network Optimization**  
-   - Enhance UDP message reliability to minimize vote transmission delays.  
-
-3. **Data Integrity**  
-   - Add robust error-checking for IR and network transmissions.  
-
-4. **Security Enhancements**  
-   - Implement encryption for IR and UDP data transmission to safeguard voting data.  
-
----
-
-## Results
-
-The system successfully implements a secure and distributed voting process. Each fob connects to the network, participates in coordinator elections, and submits authenticated votes for "Red," "Blue," or "Green." The elected coordinator receives, logs, and transmits votes to the central database. LED indicators provide device status, while the web server displays real-time vote tallies and coordinator updates.  
-
----
-
-## Challenges
-
-1. **Distributed Coordination**  
-   - Ensuring seamless leader election and failover mechanisms required careful synchronization.  
-
-2. **IR Communication Reliability**  
-   - Calibrating signal thresholds and timing to ensure accurate IR transmissions in noisy environments.  
-
-3. **Security and Data Integrity**  
-   - Designing secure and reliable communication protocols while maintaining system performance.  
+### Challenges
+1. **Leader Election**:
+   - Ensuring smooth transitions and consistent state synchronization during failovers.
+2. **IR Signal Calibration**:
+   - Achieving reliable communication in noisy or reflective environments.
+3. **Security**:
+   - Designing secure communication protocols while maintaining performance.
 
 ---
 
 ## Demonstrations
 
-- [Video Demo: Report](https://drive.google.com/file/d/1l6wGfmdgtvITa7rTuvHjnD1I_g9CTXzG/view?usp=sharing)  
-- [Video Demo: Design](https://drive.google.com/file/d/14ioolii2PttAG8Jn80Jt-KU8r46mR65U/view?usp=sharing)  
+- [Video Demo: System Overview](https://drive.google.com/file/d/1l6wGfmdgtvITa7rTuvHjnD1I_g9CTXzG/view?usp=sharing)  
+- [Video Demo: Design Details](https://drive.google.com/file/d/14ioolii2PttAG8Jn80Jt-KU8r46mR65U/view?usp=sharing)  
+
+---
+
+## Investigative Questions
+
+### 1. Potential Hacks and Mitigations
+#### A. **Man-in-the-Middle Attack**  
+   - **Threat**: An attacker intercepts IR or UDP communication to alter or replay votes.  
+   - **Mitigation**: Use encryption for IR and UDP data transmission. Implement message authentication codes (MACs) to validate message integrity.
+
+#### B. **Coordinator Compromise**  
+   - **Threat**: A malicious coordinator manipulates votes or fails to transmit them.  
+   - **Mitigation**: Regular keep-alive signals and failover mechanisms ensure compromised coordinators are replaced automatically.
+
+#### C. **Replay Attacks**  
+   - **Threat**: An attacker resends intercepted votes to skew results.  
+   - **Mitigation**: Include timestamps and unique message IDs in transmissions. Discard duplicate messages at the server.
+
+---
+
+## Potential Improvements
+
+1. **Hardware Enhancements**:
+   - Replace polling-based IR reception with hardware interrupts for real-time responsiveness.
+
+2. **Network Optimization**:
+   - Implement TCP instead of UDP for more reliable transmissions, or use acknowledgment-based mechanisms.
+
+3. **Scalability**:
+   - Optimize leader election for larger distributed systems.
+
+4. **User Experience**:
+   - Add visual feedback on the web interface for active coordinator status and failover events.
+
+5. **Enhanced Security**:
+   - Incorporate end-to-end encryption for all communications and implement secure boot for firmware protection.
+
+---
+
+## Conclusion
+
+The **Secure E-Voting System** demonstrates the feasibility of a secure and distributed voting process. By integrating NFC (via IR), dynamic leader election, and real-time data visualization, the system ensures robust and transparent operations. With further refinements in security and scalability, this platform could serve as a model for future electronic voting systems.
