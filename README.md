@@ -1,6 +1,5 @@
 # Secure E-Voting System
 
-**Authors**: Josh Bardwick, Noah Hathout, Cole Knutsen, Trieu Tran  
 **Date**: 2024-11-07  
 
 ## Overview
@@ -98,7 +97,7 @@ This project implements a secure and distributed electronic voting system using 
 ## Visuals
 
 ### Circuit Diagram
-![Circuit Diagram](Quest4-circuit-diagram.jpeg)
+![Circuit Diagram](circuit-diagram.jpeg)
 
 ---
 
