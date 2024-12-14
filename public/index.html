@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>E-Voting Results</title>
+    <style>
+        /* Simple styling for the table */
+        table {
+            border-collapse: collapse;
+            width: 60%;
+            margin: 20px auto;
+        }
+
+        th, td {
+            border: 1px solid #888;
+            padding: 8px 12px;
+            text-align: center;
+        }
+
+        h1, h2 {
+            text-align: center;
+        }
+
+        #vote-totals {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        #vote-totals li {
+            text-align: center;
+            margin: 5px 0;
+        }
+
+        #reset-button {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>E-Voting Results</h1>
+
+    <h2>List of Votes</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Voter ID</th>
+                <th>Vote ID</th>
+            </tr>
+        </thead>
+        <tbody id="vote-list">
+            <!-- Votes will be inserted here -->
+        </tbody>
+    </table>
+
+    <h2>Current Vote Totals</h2>
+    <ul id="vote-totals">
+        <!-- Vote totals will be inserted here -->
+    </ul>
+
+    <button id="reset-button">Reset Database</button>
+
+    <!-- Include Socket.io client library -->
+    <script src="/socket.io/socket.io.js"></script>
+
+    <script>
+        // Function to escape HTML to prevent XSS attacks
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"'`=\/]/g, function(s) {
+                return ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;',
+                    '/': '&#x2F;',
+                    '`': '&#x60;',
+                    '=': '&#x3D;'
+                })[s];
+            });
+        }
+
+        // Function to update the vote list
+        function updateVoteList(data) {
+            const voteList = document.getElementById('vote-list');
+            voteList.innerHTML = ''; // Clear existing content
+            data.forEach(vote => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${escapeHTML(new Date(vote.time).toLocaleString())}</td>
+                    <td>${escapeHTML(vote.voter_id.toString())}</td>
+                    <td>${escapeHTML(vote.vote_id.toString())}</td>
+                `;
+                voteList.appendChild(row);
+            });
+        }
+
+        // Function to update the vote totals
+        function updateVoteTotals(data) {
+            const voteTotals = document.getElementById('vote-totals');
+            voteTotals.innerHTML = ''; // Clear existing content
+        
+            const totals = data.reduce((acc, vote) => {
+                const voteOption = vote.vote_id;
+                acc[voteOption] = (acc[voteOption] || 0) + 1;
+                return acc;
+            }, {});
+        
+            // Display totals
+            for (const [voteOption, count] of Object.entries(totals)) {
+                const listItem = document.createElement('li');
+                listItem.textContent = `Candidate ${voteOption}: ${count} votes`;
+                voteTotals.appendChild(listItem);
+            }
+        }        
+
+        // Initialize Socket.io client
+        const socket = io();
+
+        // Listen for 'data' events from the server
+        socket.on('data', (data) => {
+            console.log("Received data:", data); // Debug log
+            if (data.error) {
+                console.error('Error receiving data:', data.error);
+                return;
+            }
+            // Update vote list and totals
+            updateVoteList(data);
+            updateVoteTotals(data);
+        });        
+
+        // Handle reset button click
+        document.getElementById('reset-button').addEventListener('click', function() {
+            if (confirm('Are you sure you want to reset the database? This action cannot be undone.')) {
+                fetch('/reset-database', { method: 'POST' })
+                    .then(response => {
+                        if (response.ok) {
+                            alert('Database has been reset.');
+                            // Clear the data on the client side
+                            updateVoteList([]);
+                            updateVoteTotals([]);
+                        } else {
+                            alert('Error resetting database.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error resetting database:', error);
+                        alert('Error resetting database.');
+                    });
+            }
+        });
+    </script>
+</body>
+</html>
